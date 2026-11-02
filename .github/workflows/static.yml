@@ -1,0 +1,51 @@
+# YouTube Archive Static Content Deployment Workflow
+name: Deploy static content to Pages
+
+on:
+  # Runs on pushes targeting the default branch
+  push:
+    branches: ["main"]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Fetch YouTube RSS Feed for @RickyMunday
+        run: |
+          # Creates a data directory and pulls the latest public RSS feed for channel UCWkwW8xZBqqXjB4teSo5fPg
+          mkdir -p assets
+          curl -s "https://www.youtube.com/feeds/videos.xml?channel_id=UCWkwW8xZBqqXjB4teSo5fPg" -o feed.xml
+          echo "Successfully fetched YouTube RSS feed for @RickyMunday."
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # Uploads the root directory containing your site files and fetched feed
+          path: '.'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
