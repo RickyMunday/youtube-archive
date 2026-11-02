@@ -1,4 +1,4 @@
-name: Sync @RickyMunday (UCWkwW8xZBqqXjB4teSo5fPg) Broadcasts
+name: Sync @RickyMunday YouTube Broadcasts
 
 on:
   schedule:
@@ -29,20 +29,21 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Fetch UCWkwW8xZBqqXjB4teSo5fPg Feed & Build Artifacts
+      - name: Resolve Channel ID & Build Artifacts
         run: |
           python3 - << 'EOF'
           import json
+          import re
           import urllib.request
           import urllib.error
           import xml.etree.ElementTree as ET
           from pathlib import Path
           from xml.sax.saxutils import escape
 
-          CHANNEL_ID = "UCWkwW8xZBqqXjB4teSo5fPg"
+          FALLBACK_CID = "UCWkwW8xZBqqXjB4teSo5fPg"
           CHANNEL_HANDLE = "@RickyMunday"
           REPO_SLUG = "RickyMunday/youtube-archive"
-          FEED_URL = f"https://www.youtube.com/feeds/videos.xml?channel_id={CHANNEL_ID}"
+          PROFILE_URL = "https://www.youtube.com/@RickyMunday"
 
           THUMB_DIR = Path("thumbnails")
           FEEDS_DIR = Path("feeds")
@@ -53,7 +54,34 @@ jobs:
           SITEMAP_FILE = FEEDS_DIR / "sitemap-video.xml"
           RAW_FEED_FILE = FEEDS_DIR / "channel-rss.xml"
 
-          HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; RickyMundayArchiver/1.0; +https://www.rickylpinzon.us)"}
+          HEADERS = {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+              "Accept-Language": "en-US,en;q=0.9"
+          }
+
+          def get_channel_id():
+              try:
+                  req = urllib.request.Request(PROFILE_URL, headers=HEADERS)
+                  with urllib.request.urlopen(req, timeout=20) as resp:
+                      html = resp.read().decode("utf-8", errors="ignore")
+                  patterns = [
+                      r'<meta itemprop="channelId" content="(UC[a-zA-Z0-9_-]{22})"',
+                      r'"externalId":"(UC[a-zA-Z0-9_-]{22})"',
+                      r'https://www\.youtube\.com/channel/(UC[a-zA-Z0-9_-]{22})'
+                  ]
+                  for pat in patterns:
+                      m = re.search(pat, html)
+                      if m:
+                          cid = m.group(1)
+                          print(f"Resolved channel ID dynamically: {cid}")
+                          return cid
+              except Exception as e:
+                  print(f"Dynamic resolution warning: {e}")
+              print(f"Falling back to configured channel ID: {FALLBACK_CID}")
+              return FALLBACK_CID
+
+          channel_id = get_channel_id()
+          feed_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
 
           def download_thumbnail(video_id, dest_path):
               if dest_path.exists() and dest_path.stat().st_size > 1024:
@@ -81,10 +109,15 @@ jobs:
               except Exception:
                   pass
 
-          req = urllib.request.Request(FEED_URL, headers=HEADERS)
-          with urllib.request.urlopen(req, timeout=20) as resp:
-              xml_bytes = resp.read()
-          RAW_FEED_FILE.write_bytes(xml_bytes)
+          print(f"Polling Atom feed: {feed_url}")
+          req = urllib.request.Request(feed_url, headers=HEADERS)
+          try:
+              with urllib.request.urlopen(req, timeout=20) as resp:
+                  xml_bytes = resp.read()
+              RAW_FEED_FILE.write_bytes(xml_bytes)
+          except Exception as e:
+              print(f"::error::Failed to fetch Atom feed: {e}")
+              raise e
 
           ns = {
               "atom": "http://www.w3.org/2005/Atom",
@@ -143,7 +176,7 @@ jobs:
                       "sameAs": [
                           "https://www.rickylpinzon.com",
                           "https://www.rickylpinzon.us",
-                          f"https://www.youtube.com/channel/{CHANNEL_ID}",
+                          f"https://www.youtube.com/channel/{channel_id}",
                           "https://www.youtube.com/@RickyMunday"
                       ]
                   },
@@ -196,6 +229,6 @@ jobs:
           if git diff --staged --quiet; then
             echo "No new broadcasts detected."
           else
-            git commit -m "chore(archive): sync @RickyMunday (UCWkwW8xZBqqXjB4teSo5fPg) broadcasts [skip ci]"
+            git commit -m "chore(archive): resilient YouTube sync and metadata build [skip ci]"
             git push
           fi
