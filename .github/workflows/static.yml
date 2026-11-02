@@ -1,21 +1,15 @@
-# YouTube Archive Static Content Deployment Workflow
 name: Deploy static content to Pages
 
 on:
-  # Runs on pushes targeting the default branch
   push:
     branches: ["main"]
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
 concurrency:
   group: "pages"
   cancel-in-progress: false
@@ -30,22 +24,34 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Fetch YouTube RSS Feed for @RickyMunday
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies and Build
         run: |
-          # Creates a data directory and pulls the latest public RSS feed for channel UCWkwW8xZBqqXjB4teSo5fPg
-          mkdir -p assets
-          curl -s "https://www.youtube.com/feeds/videos.xml?channel_id=UCWkwW8xZBqqXjB4teSo5fPg" -o feed.xml
-          echo "Successfully fetched YouTube RSS feed for @RickyMunday."
+          npm ci
+          npm run build
+        # *Verification:* Ensure your build script successfully generates the output directory (e.g., dist/).
+
+      - name: Fetch YouTube RSS Feed into Build Output
+        run: |
+          # Create the assets folder inside your build output directory
+          mkdir -p dist/assets
+          curl -s "https://www.youtube.com/feeds/videos.xml?channel_id=UCWkwW8xZBqqXjB4teSo5fPg" -o dist/assets/feed.xml
+          echo "Successfully fetched YouTube RSS feed to dist/assets/feed.xml."
 
       - name: Setup Pages
-        uses: actions/configure-pages@v6
+        uses: actions/configure-pages@v5
 
       - name: Upload Artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Uploads the root directory containing your site files and fetched feed
-          path: '.'
+          # Points to your SSG output directory instead of root '.'
+          path: 'dist'
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v5
+        uses: actions/deploy-pages@v4
