@@ -38,7 +38,7 @@ jobs:
           echo "Successfully fetched YouTube RSS feed for @RickyMunday."
 
       - name: Setup Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Upload Artifact
         uses: actions/upload-pages-artifact@v3
